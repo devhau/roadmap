@@ -92,24 +92,24 @@ class LineItem {
         var y1 = this.NodeFrom.data.y + (this.NodeFrom.data.height / 2);
         var x2 = this.NodeTo.data.x + (this.NodeTo.data.width / 2);
         var y2 = this.NodeTo.data.y + (this.NodeTo.data.height / 2);
-        if (y1 < y2 && x1 < x2) {
-            x1 = this.NodeFrom.data.x + this.NodeFrom.data.width;
-            x2 = this.NodeTo.data.x;
-        }
-        if (y1 < y2 && x1 > x2) {
-            x1 = this.NodeFrom.data.x;
-            x2 = this.NodeTo.data.x + this.NodeTo.data.width;
-        }
-        if (y1 > y2 && x1 < x2) {
+
+        var temp_x1 = x1;
+        var temp_x2 = x2;
+        if (x1 > (x2 + this.NodeTo.data.width * 1.5)) {
+            temp_x1 = this.NodeFrom.data.x;
+            temp_x2 = this.NodeTo.data.x + this.NodeTo.data.width;
+        } else if (x2 > x1 + this.NodeFrom.data.width* 1.5) {
+            temp_x1 = this.NodeFrom.data.x + this.NodeFrom.data.width;
+            temp_x2 = this.NodeTo.data.x;
+        } else if (y1 > y2) {
+            y1 = this.NodeFrom.data.y;
+            y2 = this.NodeTo.data.y + this.NodeTo.data.height;
+        } else {
             y1 = this.NodeFrom.data.y + this.NodeFrom.data.height;
             y2 = this.NodeTo.data.y;
         }
-        if (y1 > y2 && x1 > x2) {
-            y1 = this.NodeFrom.data.y;
-            y2 = this.NodeTo.data.y + this.NodeTo.data.height;
-        }
-        this.pathGenerator.clear().moveTo(x1, y1);
-        this.pathGenerator.lineTo(x2, y2);
+        this.pathGenerator.clear().moveTo(temp_x1, y1);
+        this.pathGenerator.lineTo(temp_x2, y2);
         this.elLine.setAttribute('d', this.pathGenerator.end());
     }
     Remove() {
@@ -175,7 +175,7 @@ class NodeItem {
         }
     }
     setTitle(title) {
-        this.elNode.querySelector('text tspan').innerHTML = title;
+        this.elNode.querySelector('text tspan').innerHTML = title + `;x:${this.data.x};y:${this.data.y}`;
         this.data.title = title;
         var bbox = this.elNode.querySelector('text').getBBox();
         this.setSize(bbox.width, bbox.height);
@@ -196,6 +196,7 @@ class NodeItem {
         this.elNode.querySelector('text').setAttribute('y', y + 20);
         this.data.x = x;
         this.data.y = y;
+        this.elNode.querySelector('text tspan').innerHTML = this.data.title + `;x:${this.data.x};y:${this.data.y}`;
     }
     DoDraw() {
         this.setPosition(this.data.x, this.data.y);
@@ -211,7 +212,7 @@ class RoadMap {
             parentId: 1235,
             x: 100,
             y: 20,
-            title: 'node item',
+            title: 'Node 1-2',
             content: 'content',
         },
         {
@@ -219,7 +220,7 @@ class RoadMap {
             parentId: 1236,
             x: 300,
             y: 120,
-            title: 'node item343434',
+            title: 'Node 2-3',
             content: 'content',
         },
         {
@@ -227,7 +228,7 @@ class RoadMap {
             parentId: 1234,
             x: 100,
             y: 420,
-            title: 'node item32323232dfssdsdg',
+            title: 'Node 3-1',
             content: 'content',
         },
         {
@@ -235,7 +236,7 @@ class RoadMap {
             parentId: 1234,
             x: 600,
             y: 420,
-            title: 'node nội dung 1',
+            title: 'Node 4-1',
             content: 'content',
         }
     ];
