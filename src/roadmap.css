@@ -63,14 +63,22 @@ body {
     flex: auto;
     padding: 1px;
     position: relative;
+    overflow: auto;
+}
+
+.roadmap-container .roadmap-main .roadmap-canvas svg {
+    min-width: 80%;
+    min-height: 80%;
 }
 
 .roadmap-container .roadmap-main .roadmap-property {
-    width: 350px;
+    width: 400px;
     background: #fff;
     border: cornflowerblue 1px solid;
     flex: none;
+
 }
+
 
 .roadmap-input {
     display: block;

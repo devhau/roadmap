@@ -1,3 +1,26 @@
+const getJsonUpload = () =>
+    new Promise(resolve => {
+        const inputFileElement = document.createElement('input')
+        inputFileElement.setAttribute('type', 'file')
+        // inputFileElement.setAttribute('multiple', 'false')
+        inputFileElement.setAttribute('accept', '.json')
+
+        inputFileElement.addEventListener(
+            'change',
+            async (event) => {
+                const { files } = event.target
+                if (!files) {
+                    return
+                }
+
+                const filePromises = [...files].map(file => file.text())
+
+                resolve(await Promise.all(filePromises))
+            },
+            false,
+        )
+        inputFileElement.click()
+    });
 class PathGenerator {
     currentPath;
     isRelative;
@@ -159,7 +182,13 @@ class NodeItem {
             });
             this.elNode.addEventListener('click', function (e) {
                 if (!isMove)
-                    self.parent.setNodeSelect(self);
+                    setTimeout(function () {
+                        self.parent.setNodeSelect(self);
+                    }, 300);
+            });
+            this.elNode.addEventListener('dblclick', function (e) {
+                if (!isMove && self.parent.nodeSelect == self)
+                    self.AddChild();
             });
             this.elNode.addEventListener('mousedown', function (e) {
                 self.isDown = true;
@@ -187,8 +216,50 @@ class NodeItem {
             this.parent.elCanvas.appendChild(this.elNode);
         }
     }
+    //  The following two variables should really be passed as parameters
+    setSVGtext(caption, MAXIMUM_CHARS_PER_LINE = 30, LINE_HEIGHT = 22) {
+        //  This function attempts to create a new svg "text" element, chopping 
+        //  it up into "tspan" pieces, if the caption is too long
+        //
+        var svgText = this.elNode.querySelector('text');
+
+        svgText.innerHTML = "";
+        var x = svgText.getAttributeNS(null, 'x'), y = svgText.getAttributeNS(null, 'y');
+        var words = caption.split(" ");
+        var line = "";
+
+        for (var n = 0; n < words.length; n++) {
+            var testLine = line + words[n] + " ";
+            if (testLine.length > MAXIMUM_CHARS_PER_LINE) {
+                //  Add a new <tspan> element
+                var svgTSpan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+                svgTSpan.setAttributeNS(null, 'x', x);
+                svgTSpan.setAttributeNS(null, 'y', y);
+
+                var tSpanTextNode = document.createTextNode(line);
+                svgTSpan.appendChild(tSpanTextNode);
+                svgText.appendChild(svgTSpan);
+
+                line = words[n] + " ";
+                y = LINE_HEIGHT + parseFloat(y);
+            }
+            else {
+                line = testLine;
+            }
+        }
+
+        var svgTSpan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+
+        var tSpanTextNode = document.createTextNode(line);
+        svgTSpan.appendChild(tSpanTextNode);
+        svgTSpan.setAttributeNS(null, 'x', x);
+        svgTSpan.setAttributeNS(null, 'y', y);
+        svgText.appendChild(svgTSpan);
+
+        return svgText.innerHTML;
+    }
     setTitle(title) {
-        this.elNode.querySelector('text tspan').innerHTML = title;
+        this.setSVGtext(title);
         this.data.title = title;
         var bbox = this.elNode.querySelector('text').getBBox();
         this.setSize(bbox.width, bbox.height);
@@ -204,6 +275,7 @@ class NodeItem {
         this.data.width = width + 20;
         this.elNode.querySelector('rect').setAttribute('width', this.data.width);
         this.elNode.querySelector('rect').setAttribute('height', this.data.height);
+        this.parent.UpdateSize();
     }
     setPosition(x, y) {
         this.elNode.querySelector('rect').setAttribute('x', x);
@@ -212,48 +284,37 @@ class NodeItem {
         this.elNode.querySelector('text').setAttribute('y', y + 20);
         this.data.x = x;
         this.data.y = y;
+        this.setTitle(this.data.title);
+
     }
     DoDraw() {
         this.setPosition(this.data.x, this.data.y);
-        this.setTitle(this.data.title);
+
         return this;
+    }
+    AddChild() {
+        var child = new NodeItem({
+            id: new Date().getTime(),
+            x: this.data.x,
+            y: this.data.y + this.data.height + 30,
+            title: this.data.title + " child",
+            content: '',
+            parentId: this.data.id,
+        }, this.parent);
+        child.DoDraw();
+        new LineItem({ NodeFrom: this, NodeTo: child }, this.parent);
     }
 }
 class RoadMap {
     title = "";
     node = [
         {
-            id: 1234,
-            parentId: 1235,
-            x: 100,
-            y: 20,
-            title: 'Node 1-2',
-            content: 'content',
-        },
-        {
-            id: 1235,
-            parentId: 1236,
+            id: 1,
             x: 300,
-            y: 120,
-            title: 'Node 2-3',
-            content: 'content',
+            y: 10,
+            title: 'Start RoadMap',
+            content: '',
         },
-        {
-            id: 1236,
-            parentId: 1234,
-            x: 100,
-            y: 420,
-            title: 'Node 3-1',
-            content: 'content',
-        },
-        {
-            id: 1237,
-            parentId: 1234,
-            x: 600,
-            y: 420,
-            title: 'Node 4-1',
-            content: 'content',
-        }
     ];
     nodeItems = [];
     nodeSelect = undefined;
@@ -278,7 +339,7 @@ class RoadMap {
         }
     }
     BindEl() {
-        this.elCanvas = this.elContainer.querySelector('.roadmap-canvas');
+        this.elCanvas = this.elContainer.querySelector('.roadmap-canvas svg');
         if (this.elCanvas == undefined) return;
         this.elCardbox = this.elContainer.querySelector('.roadmap-cardbox');
         this.elToolbar = this.elContainer.querySelector('.roadmap-toolbar');
@@ -293,26 +354,36 @@ class RoadMap {
         this.elPropertyContent.addEventListener('keyup', function (e) {
             self.nodeSelect?.setContent(e.target.value);
         }, true);
-        this.elContainer.querySelector('.roadmap-toolbar .btnSave').addEventListener('click', function () {
+        this.elContainer.querySelector('.roadmap-toolbar .btnSaveImage').addEventListener('click', function () {
             self.DoSave();
+        })
+        this.elContainer.querySelector('.roadmap-toolbar .btnSaveFile').addEventListener('click', function () {
+            self.DoSaveFile();
+        })
+        this.elContainer.querySelector('.roadmap-toolbar .btnImportJSON').addEventListener('click', async function () {
+            await self.DoImportFIle();
         })
     }
     loadTemplate() {
         this.elContainer.innerHTML = `<div class="roadmap-toolbar">
-        <button class="btnSave">Save</button>
+        <button class="btnSaveImage">Download Image</button>
+        <button class="btnSaveFile">Export JSON</button>
+        <button class="btnImportJSON">Import JSON</button>
         </div>
         <div class="roadmap-main" >
             <div class="roadmap-cardbox"></div>
-            <svg xmlns="http://www.w3.org/2000/svg" class="roadmap-canvas">
-            </svg>
+            <div class="roadmap-canvas">            
+                <svg xmlns="http://www.w3.org/2000/svg">
+                </svg>
+            </div>
             <div class="roadmap-property">
                 <div class="roadmap-group-input">
                     <label>Title:</labeL>
-                    <input class="roadmap-input node-title" />
+                    <textarea class="roadmap-input node-title" ></textarea>
                 </div>
                 <div class="roadmap-group-input">
                     <label>Content:</labeL>
-                    <textarea class="roadmap-input node-content"></textarea>
+                    <textarea class="roadmap-input node-content" rows="5"></textarea>
                 </div>
             </div>
         </div>`;
@@ -355,6 +426,11 @@ class RoadMap {
             }
         })
     }
+    UpdateSize() {
+        var bbox = this.elCanvas.getBBox();
+        this.elCanvas.setAttribute('width', `${bbox.x + bbox.width + 10}px`);
+        this.elCanvas.setAttribute('height', `${bbox.y + bbox.height + 10}px`);
+    }
     DoRun() {
         this.DoClear();
         this.DoDraw();
@@ -364,6 +440,21 @@ class RoadMap {
         this.SVGPNG(this.elCanvas, (function (e, e2) {
             self.download(e, "roadmap-project.png");
         }))
+    }
+    DoSaveFile() {
+        this.node = this.nodeItems.map((item) => item.data);
+        var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({
+            title: this.title,
+            node: this.node
+        }));
+        this.download(dataStr, "roadmap-project.json");
+    }
+    async DoImportFIle() {
+        const jsonFiles = await getJsonUpload();
+        var jsonVar = JSON.parse(jsonFiles[0]);
+        this.node = jsonVar.node;
+        this.title = jsonVar.title;
+        this.DoRun();
     }
     SVGPNG(svg, cb) {
         let temp = document.createElement("img");
