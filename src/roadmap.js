@@ -81,6 +81,17 @@ class LineItem {
         this.elLine.setAttribute('stroke', "red");
         this.elLine.setAttribute('stroke-width', 2);
         this.elLine.setAttribute('fill', "transparent");
+        var self = this;
+        /* 
+        this.elLine.addEventListener('dblclick', function () {
+             self.Remove();
+         })*/
+        this.elLine.addEventListener('mouseover', function () {
+            self.elLine.setAttribute('stroke-width', 5);
+        })
+        this.elLine.addEventListener('mouseleave', function () {
+            self.elLine.setAttribute('stroke-width', 2);
+        })
         this.parent.elCanvas.appendChild(this.elLine);
         this.NodeFrom.Lines.push(this);
         this.NodeTo.Lines.push(this);
@@ -92,15 +103,12 @@ class LineItem {
         var y1 = this.NodeFrom.data.y + (this.NodeFrom.data.height / 2);
         var x2 = this.NodeTo.data.x + (this.NodeTo.data.width / 2);
         var y2 = this.NodeTo.data.y + (this.NodeTo.data.height / 2);
-
-        var temp_x1 = x1;
-        var temp_x2 = x2;
-        if (x1 > (x2 + this.NodeTo.data.width * 1.5)) {
-            temp_x1 = this.NodeFrom.data.x;
-            temp_x2 = this.NodeTo.data.x + this.NodeTo.data.width;
-        } else if (x2 > x1 + this.NodeFrom.data.width* 1.5) {
-            temp_x1 = this.NodeFrom.data.x + this.NodeFrom.data.width;
-            temp_x2 = this.NodeTo.data.x;
+        if (x1 > (x2 + this.NodeTo.data.width)) {
+            x1 = this.NodeFrom.data.x;
+            x2 = this.NodeTo.data.x + this.NodeTo.data.width;
+        } else if (x2 > x1 + this.NodeFrom.data.width) {
+            x1 = this.NodeFrom.data.x + this.NodeFrom.data.width;
+            x2 = this.NodeTo.data.x;
         } else if (y1 > y2) {
             y1 = this.NodeFrom.data.y;
             y2 = this.NodeTo.data.y + this.NodeTo.data.height;
@@ -108,13 +116,14 @@ class LineItem {
             y1 = this.NodeFrom.data.y + this.NodeFrom.data.height;
             y2 = this.NodeTo.data.y;
         }
-        this.pathGenerator.clear().moveTo(temp_x1, y1);
-        this.pathGenerator.lineTo(temp_x2, y2);
+        this.pathGenerator.clear().moveTo(x1, y1);
+        this.pathGenerator.lineTo(x2, y2);
         this.elLine.setAttribute('d', this.pathGenerator.end());
     }
     Remove() {
-        this.NodeFrom.Lines.remove(this);
-        this.NodeTo.Lines.remove(this);
+        var self = this;;
+        this.NodeFrom.Lines = this.NodeFrom.Lines.filter((item) => self != item);
+        this.NodeTo.Lines = this.NodeTo.Lines.filter((item) => self != item);
         this.elLine.remove();
     }
 }
@@ -143,13 +152,18 @@ class NodeItem {
             <rect x="0" y="50" width="188.3" height="37.3" rx="2" fill="rgb(255,229,153)" fill-opacity="1" stroke="rgb(0,0,0)" stroke-width="2.7"></rect>
             <text x="10" y="70" fill="rgb(0,0,0)" font-style="normal" font-weight="normal" font-size="17px"><tspan>PostgreSQL</tspan></text>`;
             var self = this;
+            var isMove = false;
             document.addEventListener('mouseup', function (e) {
                 self.isDown = false;
                 document.body.style.cursor = '';
             });
-
+            this.elNode.addEventListener('click', function (e) {
+                if (!isMove)
+                    self.parent.setNodeSelect(self);
+            });
             this.elNode.addEventListener('mousedown', function (e) {
                 self.isDown = true;
+                isMove = false;
                 document.body.style.cursor = 'pointer';
                 self.offset = [
                     self.elNode.querySelector('rect').getAttribute('x') - e.clientX,
@@ -159,6 +173,7 @@ class NodeItem {
             this.parent.elCanvas.addEventListener('mousemove', function (e) {
                 e.preventDefault();
                 if (self.isDown) {
+                    isMove = true;
                     self.mousePosition = {
                         x: e.clientX,
                         y: e.clientY
@@ -166,21 +181,22 @@ class NodeItem {
                     self.setPosition((self.mousePosition.x + self.offset[0]), (self.mousePosition.y + self.offset[1]));
                     self.Lines.forEach(function (_item) {
                         _item.UpdatePostion();
-                        console.log(_item);
                     });
                 }
             });
             this.parent.elCanvas.appendChild(this.elNode);
-
         }
     }
     setTitle(title) {
-        this.elNode.querySelector('text tspan').innerHTML = title + `;x:${this.data.x};y:${this.data.y}`;
+        this.elNode.querySelector('text tspan').innerHTML = title;
         this.data.title = title;
         var bbox = this.elNode.querySelector('text').getBBox();
         this.setSize(bbox.width, bbox.height);
+        this.Lines.forEach(function (_item) {
+            _item.UpdatePostion();
+        });
     }
-    setBoby(content) {
+    setContent(content) {
         this.data.content = content;
     }
     setSize(width, height) {
@@ -196,7 +212,6 @@ class NodeItem {
         this.elNode.querySelector('text').setAttribute('y', y + 20);
         this.data.x = x;
         this.data.y = y;
-        this.elNode.querySelector('text tspan').innerHTML = this.data.title + `;x:${this.data.x};y:${this.data.y}`;
     }
     DoDraw() {
         this.setPosition(this.data.x, this.data.y);
@@ -241,10 +256,14 @@ class RoadMap {
         }
     ];
     nodeItems = [];
+    nodeSelect = undefined;
     elCanvas;
     elCardbox;
     elToolbar;
     elContainer;
+    elProperty;
+    elPropertyTitle;
+    elPropertyContent;
     constructor(elContainer) {
         if (elContainer == undefined) {
             console.error('elContainer is undefined');
@@ -254,24 +273,59 @@ class RoadMap {
         this.elContainer = elContainer;
         this.BindEl();
         if (this.elCanvas == undefined) {
-            console.log(1);
             this.loadTemplate();
             this.BindEl();
         }
     }
     BindEl() {
         this.elCanvas = this.elContainer.querySelector('.roadmap-canvas');
+        if (this.elCanvas == undefined) return;
         this.elCardbox = this.elContainer.querySelector('.roadmap-cardbox');
         this.elToolbar = this.elContainer.querySelector('.roadmap-toolbar');
+        this.elProperty = this.elContainer.querySelector('.roadmap-property');
+        this.elPropertyTitle = this.elContainer.querySelector('.roadmap-property .node-title');
+        this.elPropertyContent = this.elContainer.querySelector('.roadmap-property .node-content');
+        var self = this;
+        this.elProperty.style = "display:none";
+        this.elPropertyTitle.addEventListener('keyup', function (e) {
+            self.nodeSelect?.setTitle(e.target.value);
+        }, true);
+        this.elPropertyContent.addEventListener('keyup', function (e) {
+            self.nodeSelect?.setContent(e.target.value);
+        }, true);
+        this.elContainer.querySelector('.roadmap-toolbar .btnSave').addEventListener('click', function () {
+            self.DoSave();
+        })
     }
     loadTemplate() {
         this.elContainer.innerHTML = `<div class="roadmap-toolbar">
+        <button class="btnSave">Save</button>
         </div>
         <div class="roadmap-main" >
             <div class="roadmap-cardbox"></div>
             <svg xmlns="http://www.w3.org/2000/svg" class="roadmap-canvas">
             </svg>
+            <div class="roadmap-property">
+                <div class="roadmap-group-input">
+                    <label>Title:</labeL>
+                    <input class="roadmap-input node-title" />
+                </div>
+                <div class="roadmap-group-input">
+                    <label>Content:</labeL>
+                    <textarea class="roadmap-input node-content"></textarea>
+                </div>
+            </div>
         </div>`;
+    }
+    setNodeSelect(node) {
+        this.nodeSelect = node;
+        if (this.nodeSelect == undefined) {
+            this.elProperty.style = "display:none";
+            return;
+        }
+        this.elPropertyTitle.value = this.nodeSelect.data.title;
+        this.elPropertyContent.value = this.nodeSelect.data.content;
+        this.elProperty.style = "";
     }
     Import(data) {
         this.title = data?.title ?? "";
@@ -304,5 +358,50 @@ class RoadMap {
     DoRun() {
         this.DoClear();
         this.DoDraw();
+    }
+    DoSave() {
+        var self = this;
+        this.SVGPNG(this.elCanvas, (function (e, e2) {
+            self.download(e, "roadmap-project.png");
+        }))
+    }
+    SVGPNG(svg, cb) {
+        let temp = document.createElement("img");
+        let DOMURL = window.URL || window.webkitURL || window;
+        var svgText = svg.outerHTML;
+        if (!svgText.match(/xmlns=\"/mi)) {
+            svgText = svgText.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
+        }
+        let imageSrc = DOMURL.createObjectURL(
+            new Blob([svgText], { type: "image/svg+xml" })
+        );
+        var box = svg.getBBox();
+        temp.width = box.x + box.width + 10;
+        temp.height = box.y + box.height + 10;
+        temp.src = imageSrc;
+        temp.setAttribute("style", "position:fixed;left:-200vw;");
+        document.body.appendChild(temp);
+        temp.onload = function onload() {
+            let canvas = document.createElement("canvas");
+            canvas.width = temp.clientWidth;
+            canvas.height = temp.clientHeight;
+            let ctx = canvas.getContext("2d");
+
+            ctx.drawImage(temp, 0, 0);
+            let src = canvas.toDataURL("image/png");
+            cb(src, canvas);
+            temp.remove();
+            URL.revokeObjectURL(imageSrc);
+        };
+    }
+    download(href, name) {
+        var a = document.createElement('a');
+
+        a.download = name;
+        a.href = href;
+
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
     }
 }
