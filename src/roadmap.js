@@ -309,7 +309,7 @@ class RoadMap {
     title = "";
     node = [
         {
-            id: 1,
+            id: new Date().getTime(),
             x: 300,
             y: 10,
             title: 'Start RoadMap',
